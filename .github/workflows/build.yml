@@ -1,0 +1,33 @@
+name: Build GameCenter plugin
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26.2 (the Xcode the game's EAS iOS image uses)
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app && xcodebuild -version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install scons
+      - name: Build
+        run: ./scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gamecenter
+          path: dist/*
+          if-no-files-found: error
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" \
+            --notes "Built by workflow run $GITHUB_RUN_ID from $GITHUB_SHA. See BUILD_INFO.txt inside the zip."
